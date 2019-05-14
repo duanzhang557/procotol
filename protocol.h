@@ -77,3 +77,4 @@ int frame_forming(packet *sel_direc, packet *angle, packet sel_speed, int *frame
 int data_dispossing(frame *p, int *sel); //数据的处理部分，在disposs.c中有详细的解释
 int LRC_calculatiing(int *sel, int i);   //求和校验码
  data_loading(frame *s, packet *sel,int num)；//数据的装填
+ void frame_forming(frame *s, packet *sel, int *frame_num)
