@@ -7,7 +7,6 @@
 void main(int argc, char *argv[])
 {
     frame s;        //定义帧，接受来自发送方的数据
-    frane r;        //用来和发送方联系的帧
     packet direc[]; //方向数据包，用于存放发送发帧中的数据
     packet angle[]; //
     packet speed[];
@@ -23,17 +22,33 @@ void main(int argc, char *argv[])
         if (event == frame_arrival)
         {
             can_rec(&s);
-            correction = judging(&s, s.LRC);                     //判断校验码
-            if (correction == 0 || s.frame_header == frame_send) //帧头不相同，或者校验码不正确
+            switch (s.kind)
             {
-                s.frame_kind = NAK;
+            case DATA:
+                correction = judging(&s, s.LRC);                     //判断校验码
+                if (correction == 0 || s.frame_header != frame_send) //帧头不相同，或者校验码不正确
+                {
+                    s.frame_kind = NAK;
+                    can_send(&s);
+                }
+                else
+                {
+                    specie = data_selecting(packet * direc, packet * angle, packet * speed, frame * s, int *num, int specie);
+                    s.frame_kind = ACK;
+                    can_send(&s);
+                }
+                break;
+            case ENQ:
+                s.kind = ACK;
                 can_send(&s);
-            }
-            else
-            {
-                specie = data_selecting(packet * direc, packet * angle, packet * speed, frame * s, int *num, int specie);
-                s.frame_kind = ACK;
+                break;
+            case EOT:
+                s.kind = ACK;
                 can_send(&s);
+                disable_networking();
+                break;
+            default;
+            break;
             }
         }
     }
@@ -62,7 +77,7 @@ int data_selecting(packet *direc, packet *angle, packet *speed, frame *s, int *n
         {
             data_loading(&s, angle, *num); //将帧中的数据整合，放在一起
             *num += BLOCK;
-            data_parsing(angle); //将direc中的数据进行去转义字符处理，因为函数是进行地址运算，因此可以不用进行内存的请求和释放
+            data_parsing(angle); //将angle中的数据进行去转义字符处理，因为函数是进行地址运算，因此可以不用进行内存的请求和释放
         }
         else
         {
@@ -77,7 +92,7 @@ int data_selecting(packet *direc, packet *angle, packet *speed, frame *s, int *n
 
             data_loading(&s, speed, *num); //将帧中的数据整合，放在一起
             *num += BLOCK;
-            data_parsing(speed); //将direc中的数据进行去转义字符处理，因为函数是进行地址运算，因此可以不用进行内存的请求和释放
+            data_parsing(speed); //将speed中的数据进行去转义字符处理，因为函数是进行地址运算，因此可以不用进行内存的请求和释放
         }
         else
         {
