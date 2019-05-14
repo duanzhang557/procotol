@@ -51,7 +51,8 @@ void main(int argc, char *argv[])
     }
     else if (event == time_out || event == error_serious)
     {
-        printf("通信连接建立失败！！") ； return 0;
+        printf("通信连接建立失败！！");
+        return 0;
     }
 
     s.frame_header = frame_send; //给帧头赋值
@@ -65,10 +66,59 @@ void main(int argc, char *argv[])
             switch (s.kind)
             {
             case ACK:
-                //data_into_frame是选择帧的种类和序号的函数，
-                int data_into_frame(packet * sel_direc, packet * angle, packet sel_speed, int *frame_num, int specie);
-                frame_num++;
+                if (specie == 0) //用于记录发送的种类，为0 方向，为1角度，为2速度
+                {   //判断第一种是否已经发送完成
+                    if (frame_num < sizeof(sel_direc) / sizeof(int) / BLOCK + 1)//小于的话，未发送完，继续发送
+                    {
+                        data_into_frame(&s, sel_direc, num_address);
+                        frame_num++;
+                        can_send(&);
+                        start_timer();
+                    }
+                    else//direc数据发送完成，specie自增，继续发送angle数据的帧
+                    {
+                        specie++;
+                        frame_num = 0;
+                    }
+                }
+                else if (specie == 1)
+                {
+                    if (frame_num < sizeof(sel_angle) / sizeof(int) / BLOCK + 1)
+                    {
+                        frame_forming(&s, sel_angle, num_address);
+                        frame_num++;
+                        can_send(&);
+                        start_timer();
+                    }
+                    else
+                    {
+                        specie++;
+                        frame_num = 0;
+                    }
+                }
+                else if (specie == 2)
+                {
+                    if (frame_num < sizeof(sel_speed) / sizeof(int) / BLOCK + 1)
+                    {
+                        frame_forming(&s, sel_speed, num_address);
+                        frame_num++;
+                        can_send(&);
+                        start_timer();
+                    }
+                    else
+                    {
+                        specie++;
+                        frame_num = 0;
+                    }
+                }
+                else if (specie == 3)//为3时，全部数据已经发送成功，向接收方发送结束帧
+                {
+                    s.frame_kind = EOT;
+                    can_send(&s);
+                    close_timer();
+                }
                 break;
+
             case NAK:
                 can_send(&s);
                 start_timer();
@@ -86,73 +136,20 @@ void main(int argc, char *argv[])
         else if (event_type == error_serious)
         {
             disable_networking();
+            close_timer();
         }
     }
+    close_timer();
+    return 0;
 }
-/*********************************
- * 成帧函数
- *specie是用于记录帧的种类，每个frame_num是用于记录已经发送的帧的数目
- 每次调用函数只会执行函数的三个if中的一个，specie鉴别传输的种类，frame_num鉴别需要发送的帧的序号
-*********************************/
-int frame_forming(packet *sel_direc, packet *angle, packet sel_speed, int *frame_num, int specie)
-{
-    int num = 0; //记录每种数据形成的帧的个数
-    if (specie == 0)
-    {
-        num = sizeof(sel_direc) / sizeof(int) / BLOCK + 1;
-        if (*frame_num < num)
-        {   //info_into_frame为成帧函数，
-            specie = info_into_frame(&s, direc, num_address, sel_angle);
-            return specie; //发送完就推出if循环，不进行下面的if环节
-        }
-        //表明direc的帧已经发送完成，此时speice自增，下次发送下一种类的帧
-        else
-        {
-            specie++;
-            *frame_num = 0;
-        }
-    }
-    else if (specie == 1)
-    {
-        num = sizeof(sel_angle) / sizeof(int) / BLOCK + 1;
-        if (*frame_num < num)
-        {
-            specie = info_into_frame(&s, packet * angle, num_address, packet * sel_angle);
-            return specie;
-        }
-        else
-        {
-            specie++;
-            *frame_num = 0;
-        }
-    }
-    else if (specie == 2)
-    {
-        num = sizeof(sel_speed) / sizeof(int) / BLOCK + 1;
-        if (*frame_num < num)
-        {
-        }
-        else
-        {
-            specie++;
-            *frame_num = 0;
-        }
-    }
-    else
-    {
-        s.frame_kind = EOT;
-        can_send(&s);
-        break;
-    }
-}
+
 //成帧函数
-int info_into_frame(&s, packet *p, int *frame_num, packet *sel)
+void frame_forming(frame *s, packet *sel, int *frame_num)
 {
+    close_timer();
     data_loading(*(sel + *frame_num), direc); //帧中info数据的赋值
-    s.lrc = lrc_calculatiing(sel_angle, n);   //lrc_calculatiing是计算校验码的函数，采用求和校验码
+    s.lrc = lrc_calculatiing(sel, n);         //lrc_calculatiing是计算校验码的函数，采用求和校验码
     s.frame_header = DATA;
     frame_send = ^frame_send; //帧头的翻转
-    can_send(&);
-    start_timer();
     return specie;
 }
